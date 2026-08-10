@@ -1,29 +1,57 @@
-# pip install edge-tts
-import edge_tts
-import asyncio
+"""
+tts.py
+======
+Fully local, fully offline TTS via pyttsx3.
+
+pyttsx3 wraps whatever speech engine your OS already has:
+  - Windows -> SAPI5 (the same voices Web Speech API uses in Chrome/Edge)
+  - macOS   -> NSSpeechSynthesizer
+  - Linux   -> espeak (install with: sudo apt install espeak)
+
+No internet call, no API key, nothing leaves the machine. Quality is more
+robotic than edge-tts/Piper, but it's genuinely local.
+
+Install:
+    pip install pyttsx3
+"""
+
 import base64
+import os
+import tempfile
 
-# en-GB-RyanNeural = calm, refined adult British male — closest free match to JARVIS
-JARVIS_VOICE = "en-GB-RyanNeural"
+import pyttsx3
 
-async def _generate_audio(text: str) -> bytes:
-    """Streams MP3 bytes from Edge's free neural TTS — no API key required."""
-    communicate = edge_tts.Communicate(
-        text=text,
-        voice=JARVIS_VOICE,
-        rate="-8%",    # slower, measured delivery
-        pitch="-5Hz"   # slightly lower = calm/grounded tone
-    )
 
-    audio_chunks = bytearray()
-    async for chunk in communicate.stream():
-        if chunk["type"] == "audio":
-            audio_chunks.extend(chunk["data"])
-
-    return bytes(audio_chunks)
+def _pick_voice(engine) -> None:
+    """Try to land on a male-ish system voice for the JARVIS vibe."""
+    for voice in engine.getProperty("voices"):
+        name = voice.name.lower()
+        if any(tag in name for tag in ("david", "mark", "male", "ryan", "george")):
+            engine.setProperty("voice", voice.id)
+            return
+    # fall back to whatever the OS default is
 
 
 def generate_jarvis_audio_base64(text: str) -> str:
-    """Sync wrapper — call this from FastAPI routes. Returns Base64-encoded MP3."""
-    audio_bytes = asyncio.run(_generate_audio(text))
-    return base64.b64encode(audio_bytes).decode("utf-8")
+    """Synthesizes `text` locally and returns Base64-encoded WAV audio."""
+    engine = pyttsx3.init()
+    _pick_voice(engine)
+    engine.setProperty("rate", 165)   # slightly slower, measured delivery
+    engine.setProperty("volume", 1.0)
+
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+            tmp_path = tmp.name
+
+        engine.save_to_file(text, tmp_path)
+        engine.runAndWait()
+
+        with open(tmp_path, "rb") as f:
+            audio_bytes = f.read()
+
+        return base64.b64encode(audio_bytes).decode("utf-8")
+    finally:
+        engine.stop()
+        if tmp_path and os.path.exists(tmp_path):
+            os.remove(tmp_path)

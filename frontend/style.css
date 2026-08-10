@@ -46,13 +46,13 @@ button{
 
 #answer{
 
-    margin-top:20px;
+    margin-top:10px;
 
-    min-height:60px;
+    min-height:20px;
 
-    border:1px solid #ddd;
+    color:#666;
 
-    padding:10px;
+    font-style:italic;
 }
 /* ================================
    INPUT ROW
@@ -83,4 +83,41 @@ button{
     color:#666;
     min-height:20px;
     font-style:italic;
+}
+
+/* ================================
+   CHAT HISTORY
+================================ */
+
+#chat-history{
+    margin-top:10px;
+    max-height:320px;
+    overflow-y:auto;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    padding-right:4px;
+}
+
+.user-msg,
+.jarvis-msg{
+    padding:10px 14px;
+    border-radius:14px;
+    max-width:85%;
+    line-height:1.4;
+    word-wrap:break-word;
+}
+
+.user-msg{
+    align-self:flex-end;
+    background:#2b6cb0;
+    color:white;
+    border-bottom-right-radius:4px;
+}
+
+.jarvis-msg{
+    align-self:flex-start;
+    background:#eee;
+    color:#222;
+    border-bottom-left-radius:4px;
 }

@@ -35,11 +35,38 @@ if (SpeechRecognition) {
 
 }
 // ============================================
+// CHAT HISTORY
+// ============================================
+let chatHistory = [];
+
+function appendMessage(role, text) {
+    const container = document.getElementById("chat-history");
+    if (!container) return;
+    const bubble = document.createElement("div");
+    bubble.className = role === "user" ? "user-msg" : "jarvis-msg";
+    bubble.innerText = text;
+    container.appendChild(bubble);
+    container.scrollTop = container.scrollHeight;
+}
+
+// ============================================
+// MARKDOWN STRIP (so TTS doesn't say "asterisk asterisk")
+// ============================================
+function cleanForSpeech(text) {
+    return text
+        .replace(/\*\*/g, "")
+        .replace(/\*/g, "")
+        .replace(/`/g, "")
+        .replace(/#/g, "")
+        .trim();
+}
+
+// ============================================
 // VOICE STATE
 // ============================================
 let voiceEnabled = true;
-let useNeuralVoice = false; // false = Web Speech API (instant), true = Edge-TTS (higher quality)
-let currentAudio = null;    // tracks server-generated audio for stop/mute
+let useBackendVoice = false; // false = Web Speech API (instant), true = local pyttsx3 via /speak
+let currentAudio = null;     // tracks server-generated audio for stop/mute
 let jarvisVoice = null;
 
 // ============================================
@@ -87,9 +114,9 @@ function speakAsJarvis(text) {
 }
 
 // ============================================
-// APPROACH 2: EDGE-TTS via /speak endpoint (higher quality, async)
+// APPROACH 2: LOCAL BACKEND VOICE via /speak (pyttsx3, fully offline)
 // ============================================
-async function speakAsJarvisNeural(text) {
+async function speakAsJarvisBackend(text) {
     if (!voiceEnabled || !text?.trim()) return;
 
     if (currentAudio) {
@@ -116,8 +143,8 @@ async function speakAsJarvisNeural(text) {
             console.warn("Autoplay blocked, will resume after user interaction:", err);
         });
     } catch (err) {
-        console.error("Neural TTS request failed, falling back to Web Speech:", err);
-        speakAsJarvis(text); // graceful fallback if backend/edge-tts fails
+        console.error("Backend TTS request failed, falling back to Web Speech:", err);
+        speakAsJarvis(text); // graceful fallback if backend/pyttsx3 fails
     }
 }
 
@@ -125,8 +152,8 @@ async function speakAsJarvisNeural(text) {
 // UNIFIED SPEAK DISPATCHER
 // ============================================
 function speak(text) {
-    if (useNeuralVoice) {
-        speakAsJarvisNeural(text);
+    if (useBackendVoice) {
+        speakAsJarvisBackend(text);
     } else {
         speakAsJarvis(text);
     }
@@ -253,18 +280,24 @@ function toggleJarvisVoice() {
 }
 
 function toggleVoiceQuality() {
-    useNeuralVoice = !useNeuralVoice;
+    useBackendVoice = !useBackendVoice;
     const btn = document.getElementById("voice-quality-btn");
-    btn.textContent = useNeuralVoice ? "✨ Neural Voice" : "⚡ Instant Voice";
+    btn.textContent = useBackendVoice ? "🖥️ Backend Voice (pyttsx3)" : "⚡ Instant Voice (browser)";
 }
 
 // ============================================
-// YOUR EXISTING askQuestion() — MODIFIED to speak the answer
+// YOUR EXISTING askQuestion() — MODIFIED to log history + speak clean text
 // ============================================
 async function askQuestion() {
-    const question = document.getElementById("question").value;
+    const questionInput = document.getElementById("question");
+    const question = questionInput.value.trim();
+    if (!question) return;
+
     const answerDiv = document.getElementById("answer");
 
+    chatHistory.push({ role: "user", content: question });
+    appendMessage("user", question);
+    questionInput.value = "";
     answerDiv.innerText = "Thinking...";
 
     try {
@@ -275,9 +308,12 @@ async function askQuestion() {
         });
 
         const data = await response.json();
-        answerDiv.innerText = data.answer;
 
-        speak(data.answer); // NEW — speaks the response automatically
+        chatHistory.push({ role: "assistant", content: data.answer });
+        appendMessage("assistant", data.answer);
+        answerDiv.innerText = "";
+
+        speak(cleanForSpeech(data.answer)); // speaks the cleaned response
 
     } catch (error) {
         answerDiv.innerText = "Error connecting to backend.";

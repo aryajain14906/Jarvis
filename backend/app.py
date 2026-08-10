@@ -18,9 +18,11 @@ app.add_middleware(
 
 # One MemoryManager per user. For a single-user home JARVIS this is fine
 # as a module-level singleton; for multi-user, key a dict by user_id/session_id.
+#
+# NOTE: dropped `chroma_path` here -- memory.py is SQLite-only (no ChromaDB),
+# so that kwarg didn't exist on MemoryManager and would raise a TypeError.
 memory = MemoryManager(
     db_path="jarvis_memory.db",
-    chroma_path="jarvis_chroma",
     user_id="default_user",
     short_term_turns=8,
 )
@@ -44,18 +46,14 @@ def chat(request: ChatRequest, background_tasks: BackgroundTasks):
     question = request.question
 
     # 1. Build memory context BEFORE calling the LLM (facts + recent turns).
-    #    This is the retrieval step -- capped in size, so it adds negligible
-    #    latency (local embedding + SQLite lookup, no network calls).
+    #    Local embedding + SQLite lookup, capped in size -- negligible latency.
     context = memory.build_context(question)
 
-    # 2. Call the LLM with the question + injected memory context.
-    #    See llm.py for how `context` gets folded into the system prompt.
+    # 2. Call the local Ollama model with the question + injected memory.
     answer = ask_llm(question, context=context)
 
     # 3. Update memory AFTER responding, in the background, so fact
     #    extraction / embedding never delays what the user hears.
-    #    Pass ask_llm itself as the fallback extractor so the LLM can catch
-    #    facts the regex heuristics miss (uses a separate short prompt).
     background_tasks.add_task(memory.record_turn, question, answer, ask_llm)
 
     return {"answer": answer}
@@ -67,7 +65,7 @@ def speak(request: SpeakRequest):
         audio_base64 = generate_jarvis_audio_base64(request.text)
         return {
             "audio_base64": audio_base64,
-            "audio_format": "mp3"
+            "audio_format": "wav",  # pyttsx3/SAPI5 outputs wav, not mp3
         }
     except Exception as e:
         return {"error": str(e)}
