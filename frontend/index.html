@@ -1,53 +1,214 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Jarvis</title>
-
-    <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>JARVIS</title>
+<link rel="stylesheet" href="style.css" />
 </head>
+<body data-jarvis-state="IDLE">
 
-<body>
+  <!-- ============================================================
+       JARVIS CORE VISUALIZATION (Three.js renders into this canvas)
+       ============================================================ -->
+  <canvas id="jarvis-canvas"></canvas>
+  <div class="vignette" aria-hidden="true"></div>
 
-    <div class="container">
+  <!-- ============================================================
+       TOP BAR
+       ============================================================ -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">J&nbsp;A&nbsp;R&nbsp;V&nbsp;I&nbsp;S</span>
+      <span class="brand-sub">Personal Assistant</span>
+    </div>
 
-        <h1>Jarvis Assistant</h1>
+    <div class="system-status">
+      <span class="status-line">
+        <span id="topbar-status-dot" class="status-dot"></span>
+        <span id="topbar-status-text">System Online</span>
+      </span>
+      <span class="system-status-sub">Local &middot; Ollama</span>
+    </div>
+  </header>
 
-        <div class="input-row">
+  <!-- ============================================================
+       MAIN STAGE — the core sits centered here, status readout
+       just below it.
+       ============================================================ -->
+  <main class="stage">
+    <div class="state-readout" aria-live="polite">
+      <span id="state-label">IDLE</span>
+    </div>
+  </main>
 
-    <input
-        type="text"
-        id="question"
-        placeholder="Ask me anything..."
-    >
+  <!-- ============================================================
+       DEV TRANSCRIPT — temporary. Disable by setting
+       JarvisUI.CONFIG.showTranscript = false, or add the class
+       "transcript-hidden" to #transcript-panel directly.
+       ============================================================ -->
+  <section id="transcript-panel" class="transcript-panel">
+    <div class="transcript-line transcript-line--you">
+      <span class="transcript-label">You</span>
+      <span id="transcript-you" class="transcript-text"></span>
+    </div>
+    <div class="transcript-line transcript-line--jarvis">
+      <span class="transcript-label">Jarvis</span>
+      <span id="transcript-jarvis" class="transcript-text"></span>
+    </div>
+  </section>
 
-    <button id="micBtn">
-        🎤
+  <!-- ============================================================
+       DOCK — primary controls
+       ============================================================ -->
+  <footer class="dock">
+    <button id="micBtn" class="dock-mic" aria-label="Talk to Jarvis" type="button">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M12 15a3.5 3.5 0 0 0 3.5-3.5V6a3.5 3.5 0 0 0-7 0v5.5A3.5 3.5 0 0 0 12 15Z" stroke="currentColor" stroke-width="1.4"/>
+        <path d="M6.5 11.25V12a5.5 5.5 0 0 0 11 0v-.75" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        <path d="M12 17.5V21M9 21h6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+      </svg>
+      <span class="mic-ring" aria-hidden="true"></span>
     </button>
 
-    <button id="askBtn">
-        Ask
-    </button>
+    <div class="dock-input">
+      <input id="question" type="text" placeholder="Ask Jarvis&hellip;" autocomplete="off" />
+      <button id="askBtn" class="dock-ask" type="button">Ask</button>
+    </div>
 
-</div>
+    <div class="dock-secondary">
+      <button id="historyBtn" class="dock-ghost" type="button">History</button>
+      <button id="settingsBtn" class="dock-ghost" type="button">Settings</button>
+    </div>
+  </footer>
 
-<div id="listening-status"></div>
+  <!-- ============================================================
+       PANEL OVERLAY (shared backdrop for sliding panels)
+       ============================================================ -->
+  <div id="panel-overlay" class="panel-overlay"></div>
 
-        <div id="chat-history"></div>
+  <!-- ============================================================
+       HISTORY PANEL
+       ============================================================ -->
+  <aside id="history-panel" class="side-panel history-panel" aria-hidden="true">
+    <div class="panel-header">
+      <h2>History</h2>
+      <button class="panel-close" data-close="history" aria-label="Close history" type="button">&times;</button>
+    </div>
+    <div id="history-list" class="panel-body history-list"></div>
+  </aside>
 
-        <div id="answer"></div>
+  <!-- ============================================================
+       SETTINGS PANEL
+       ============================================================ -->
+  <aside id="settings-panel" class="side-panel settings-panel" aria-hidden="true">
+    <div class="panel-header">
+      <h2>Settings</h2>
+      <button class="panel-close" data-close="settings" aria-label="Close settings" type="button">&times;</button>
+    </div>
+
+    <div class="panel-body">
+
+      <section class="settings-group">
+        <h3>Voice</h3>
+
+        <label class="settings-row">
+          <span>Voice output</span>
+          <input type="checkbox" id="setting-voice-enabled" class="switch" checked />
+        </label>
+
+        <label class="settings-row">
+          <span>Use local backend voice (pyttsx3)</span>
+          <input type="checkbox" id="setting-backend-voice" class="switch" />
+        </label>
+
+        <label class="settings-row settings-row--select">
+          <span>Voice</span>
+          <select id="setting-voice-select"></select>
+        </label>
+
+        <label class="settings-row settings-row--range">
+          <span>Speech speed</span>
+          <input type="range" id="setting-voice-speed" min="0.6" max="1.4" step="0.05" value="0.95" />
+        </label>
+
+        <label class="settings-row settings-row--range">
+          <span>Volume</span>
+          <input type="range" id="setting-voice-volume" min="0" max="1" step="0.05" value="1" />
+        </label>
+      </section>
+
+      <section class="settings-group">
+        <h3>AI</h3>
+        <label class="settings-row">
+          <span>Ollama model</span>
+          <span class="settings-static">llama3 (local)</span>
+        </label>
+      </section>
+
+      <section class="settings-group">
+        <h3>Wake word</h3>
+        <label class="settings-row">
+          <span>Enabled</span>
+          <input type="checkbox" id="setting-wakeword-enabled" class="switch" checked disabled />
+        </label>
+        <label class="settings-row settings-row--range">
+          <span>Sensitivity</span>
+          <input type="range" id="setting-wakeword-sensitivity" min="0" max="1" step="0.05" value="0.5" disabled />
+        </label>
+        <p class="settings-note">Handled by the native listener process. Synchronization with the frontend is not yet connected.</p>
+      </section>
+
+      <section class="settings-group">
+        <h3>Visualization</h3>
+        <label class="settings-row settings-row--range">
+          <span>Intensity</span>
+          <input type="range" id="setting-intensity" min="0.3" max="2" step="0.05" value="1" />
+        </label>
+        <label class="settings-row settings-row--range">
+          <span>Particle density</span>
+          <input type="range" id="setting-particle-density" min="0.2" max="2" step="0.05" value="1" />
+        </label>
+        <label class="settings-row settings-row--range">
+          <span>Animation speed</span>
+          <input type="range" id="setting-animation-speed" min="0.2" max="2.5" step="0.05" value="1" />
+        </label>
+      </section>
+
+      <section class="settings-group">
+        <h3>Developer</h3>
+        <label class="settings-row">
+          <span>Show transcript readout</span>
+          <input type="checkbox" id="setting-show-transcript" class="switch" checked />
+        </label>
+      </section>
+
+      <section class="settings-group">
+        <h3>System</h3>
+        <div class="settings-row">
+          <span>Microphone</span>
+          <span id="system-mic-status" class="settings-static">Checking&hellip;</span>
+        </div>
+        <div class="settings-row">
+          <span>Backend connection</span>
+          <span class="settings-static">
+            <span id="system-backend-dot" class="status-dot"></span>
+            <span id="system-backend-status">Checking&hellip;</span>
+          </span>
+        </div>
+        <div class="settings-row">
+          <span>Ollama connection</span>
+          <span id="system-ollama-status" class="settings-static">Checking&hellip;</span>
+        </div>
+      </section>
 
     </div>
-        <div id="voice-controls" style="margin-top: 10px;">
-        <button id="voice-toggle-btn" onclick="toggleJarvisVoice()" aria-pressed="true">
-            🔊 Voice: ON
-        </button>
-        <button id="voice-quality-btn" onclick="toggleVoiceQuality()">
-            ⚡ Instant Voice (browser)
-        </button>
-    </div>
-    <script src="script.js"></script>
+  </aside>
 
+  <!-- ============================================================
+       SCRIPTS — three.js first (vendored locally), then the app.
+       ============================================================ -->
+  <script src="vendor/three.min.js"></script>
+  <script src="script.js"></script>
 </body>
 </html>
