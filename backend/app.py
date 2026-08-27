@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from llm import ask_llm
 from agent import run_agent
 from tts import generate_jarvis_audio_base64
-from memory import MemoryManager
+from memory import MemoryManager, set_shared_memory_manager
 
 app = FastAPI()
 
@@ -19,14 +19,14 @@ app.add_middleware(
 
 # One MemoryManager per user. For a single-user home JARVIS this is fine
 # as a module-level singleton; for multi-user, key a dict by user_id/session_id.
-#
-# NOTE: dropped `chroma_path` here -- memory.py is SQLite-only (no ChromaDB),
-# so that kwarg didn't exist on MemoryManager and would raise a TypeError.
 memory = MemoryManager(
     db_path="jarvis_memory.db",
     user_id="default_user",
     short_term_turns=8,
 )
+# Makes this same MemoryManager reachable from tool/memory.py's remember_fact,
+# without a circular import between app.py and the tool package.
+set_shared_memory_manager(memory)
 
 
 class ChatRequest(BaseModel):

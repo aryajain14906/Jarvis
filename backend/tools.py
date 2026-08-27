@@ -16,10 +16,11 @@ import ast
 import operator
 from datetime import datetime
 
-from tool.system import open_application, list_known_apps
+from tool.system import open_application, close_application, list_known_apps, set_volume, take_screenshot
 from tool.filesystem import search_files, read_file, create_file, write_file, move_file, copy_file
 from tool.browser import open_browser, navigate, click, type_text, read_page, close_browser
 from tool.web import web_search, fetch_url
+from tool.memory import remember_fact
 
 # ---- Safe arithmetic evaluator (no eval()) ----
 _ALLOWED_OPERATORS = {
@@ -90,6 +91,18 @@ TOOLS = {
         "function": list_known_apps,
         "description": "List every app name JARVIS currently knows how to open. Use this when asked what apps you can open, not open_application. Input: ignored, pass empty string.",
     },
+    "close_application": {
+        "function": close_application,
+        "description": "Close a running application like notepad, chrome, or spotify. Input: the app name.",
+    },
+    "set_volume": {
+        "function": set_volume,
+        "description": "Set the system volume to a specific percentage. Input: a number 0-100, e.g. '30'.",
+    },
+    "take_screenshot": {
+        "function": take_screenshot,
+        "description": "Take a screenshot of the screen and save it. Input: ignored, pass empty string.",
+    },
     # --- 4.2C: filesystem ---
     "search_files": {
         "function": search_files,
@@ -148,6 +161,10 @@ TOOLS = {
     "fetch_url": {
         "function": fetch_url,
         "description": "Fetch a webpage's visible text content (no browser needed, static pages only). Input: a URL.",
+    },
+    "remember_fact": {
+        "function": remember_fact,
+        "description": "Explicitly save a fact/preference the user asks you to remember (e.g. 'remember my favorite song is X'). Input: the concrete fact in plain text, resolved from context if the user used a pronoun like 'it'.",
     },
 }
 

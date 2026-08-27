@@ -14,26 +14,29 @@ from bs4 import BeautifulSoup
 
 
 def web_search(query: str) -> str:
-    """Search the web and return a short summary. Input: a search query."""
+    """Search the web and return the top results. Input: a search query."""
     try:
         resp = requests.get(
-            "https://api.duckduckgo.com/",
-            params={"q": query, "format": "json", "no_html": 1, "skip_disambig": 1},
+            "https://html.duckduckgo.com/html/",
+            params={"q": query},
+            headers={"User-Agent": "Mozilla/5.0"},
             timeout=10,
         )
         resp.raise_for_status()
-        data = resp.json()
+        soup = BeautifulSoup(resp.text, "html.parser")
 
-        abstract = data.get("AbstractText")
-        if abstract:
-            return abstract
+        results = []
+        for result in soup.select(".result__body")[:3]:
+            title_el = result.select_one(".result__title")
+            snippet_el = result.select_one(".result__snippet")
+            title = title_el.get_text(strip=True) if title_el else ""
+            snippet = snippet_el.get_text(strip=True) if snippet_el else ""
+            if title or snippet:
+                results.append(f"{title}: {snippet}" if snippet else title)
 
-        topics = data.get("RelatedTopics", [])
-        snippets = [t["Text"] for t in topics if isinstance(t, dict) and t.get("Text")]
-        if snippets:
-            return "\n".join(snippets[:3])
-
-        return f"No quick summary found for '{query}'. Try fetch_url with a specific site instead."
+        if results:
+            return "\n".join(results)
+        return f"No web results found for '{query}'."
     except Exception as e:
         return f"Error searching: {e}"
 

@@ -212,8 +212,10 @@ class LongTermMemory:
 # ------------------------------------------------------------------
 # FACT EXTRACTION
 # ------------------------------------------------------------------
+# NOTE: (?:favou?rite) matches both "favorite" and "favourite" -- the
+# original US-only spelling was silently missing UK-spelled facts.
 _HEURISTIC_PATTERNS = [
-    (r"\bmy favorite (\w[\w\s]*?) is ([\w .,'-]+)", "preference"),
+    (r"\bmy favou?rite (\w[\w\s]*?) is ([\w .,'-]+)", "preference"),
     (r"\bi (?:live|work) in ([\w .,'-]+)", "fact"),
     (r"\bmy name is ([\w .'-]+)", "fact"),
     (r"\bremind me to ([\w .,'-]+)", "task"),
@@ -320,3 +322,19 @@ class MemoryManager:
         if llm_call is not None:
             for fact in extract_facts_llm(user_text, assistant_text, llm_call):
                 self.long_term.store_fact(fact["content"], category=fact.get("category", "fact"))
+
+
+# ------------------------------------------------------------------
+# SHARED INSTANCE ACCESSOR -- lets tool/memory.py reach the same
+# MemoryManager app.py created, without a circular import.
+# ------------------------------------------------------------------
+_shared_memory_manager: "MemoryManager | None" = None
+
+
+def set_shared_memory_manager(manager: "MemoryManager") -> None:
+    global _shared_memory_manager
+    _shared_memory_manager = manager
+
+
+def get_shared_memory_manager() -> "MemoryManager | None":
+    return _shared_memory_manager

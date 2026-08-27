@@ -52,13 +52,34 @@ def navigate(url: str) -> str:
 
 
 def click(target: str) -> str:
-    """Click an element by visible text. Input: the text on the button/link to click."""
+    """Click an element by visible text, or by accessible label/role if no text matches. Input: the text or purpose (e.g. 'search') of the button/link to click."""
     try:
         _ensure_browser()
-        _page.get_by_text(target, exact=False).first.click(timeout=8000)
-        return f"Clicked '{target}'."
     except Exception as e:
-        return f"Error clicking '{target}': {e}"
+        return f"Error opening browser: {e}"
+
+    attempts = [
+        lambda: _page.get_by_text(target, exact=False).first,
+        lambda: _page.get_by_role("button", name=target, exact=False).first,
+        lambda: _page.get_by_role("link", name=target, exact=False).first,
+        lambda: _page.get_by_label(target, exact=False).first,
+        lambda: _page.get_by_placeholder(target, exact=False).first,
+        # Icon-only buttons (e.g. a magnifying-glass search icon) often have no
+        # visible text or label at all -- fall back to a CSS attribute guess.
+        lambda: _page.locator(f"[aria-label*='{target}' i], [title*='{target}' i]").first,
+    ]
+
+    last_error = None
+    for get_locator in attempts:
+        try:
+            locator = get_locator()
+            locator.click(timeout=4000)
+            return f"Clicked '{target}'."
+        except Exception as e:
+            last_error = e
+            continue
+
+    return f"Error clicking '{target}': couldn't find a matching element ({last_error})."
 
 
 def type_text(tool_input: str) -> str:
