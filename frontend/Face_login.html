@@ -1,0 +1,105 @@
+<!--
+face_login_example.html
+=========================
+Reference implementation for the face-login screen. Merge the relevant
+pieces into your existing index.html/script.js -- this is standalone so
+you can test it in isolation first before wiring it into your real HUD.
+
+Flow:
+  1. Shows a live webcam feed (browser's own getUserMedia -- no backend
+     video streaming needed).
+  2. Every 1.5s, grabs a frame and POSTs it to /verify_face.
+  3. On a match: stops the webcam, hides this screen, shows #main-screen,
+     plays "Hello sir, systems online" via /speak, then calls
+     startListening() -- YOU need to replace that with whatever function
+     your existing wake.py/mic JS already uses to begin listening.
+-->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>JARVIS -- Face Login</title>
+<style>
+  body { background: #0a0a0a; color: #e0e0e0; font-family: sans-serif; text-align: center; }
+  #login-screen video { border-radius: 12px; border: 2px solid #2a9df4; margin-top: 40px; }
+  #status { margin-top: 16px; font-size: 14px; color: #888; }
+  #main-screen { display: none; margin-top: 100px; }
+  #main-screen h1 { color: #2a9df4; }
+</style>
+</head>
+<body>
+
+  <div id="login-screen">
+    <video id="face-video" width="480" height="360" autoplay muted playsinline></video>
+    <canvas id="capture-canvas" width="480" height="360" style="display:none;"></canvas>
+    <div id="status">Looking for a known face...</div>
+  </div>
+
+  <div id="main-screen">
+    <h1>JARVIS</h1>
+    <div>Listening...</div>
+  </div>
+
+  <script>
+    const video = document.getElementById("face-video");
+    const canvas = document.getElementById("capture-canvas");
+    const statusEl = document.getElementById("status");
+    let verifyTimer = null;
+
+    // --- Step 1: start the webcam feed (this alone satisfies "show my face") ---
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then(stream => {
+        video.srcObject = stream;
+        verifyTimer = setInterval(captureAndVerify, 1500);
+      })
+      .catch(err => {
+        statusEl.textContent = "Camera access denied or unavailable: " + err.message;
+      });
+
+    // --- Step 2: periodically snapshot a frame and check it against the backend ---
+    function captureAndVerify() {
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
+      const base64Image = dataUrl.split(",")[1]; // strip the "data:image/jpeg;base64," prefix
+
+      fetch("http://127.0.0.1:8000/verify_face", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: base64Image }),
+      })
+        .then(res => res.json())
+        .then(data => {
+          console.log("[verify_face]", data); // check DevTools console (F12) for the real message/confidence
+          if (data.authorized) {
+            onAuthorized(data.name, data.greeting);
+          } else {
+            statusEl.textContent = data.message || "Face not recognized -- keep looking at the camera.";
+          }
+        })
+        .catch(err => {
+          statusEl.textContent = "Verification error: " + err.message;
+        });
+    }
+
+    // --- Step 3: on success, stop verifying, then hand off to the real JARVIS page ---
+    function onAuthorized(name, greeting) {
+      clearInterval(verifyTimer);
+
+      // Stop the webcam feed -- no need to keep the camera on after login.
+      const stream = video.srcObject;
+      if (stream) stream.getTracks().forEach(track => track.stop());
+
+      statusEl.textContent = `Welcome, ${name}. Opening JARVIS...`;
+
+      // The ?authenticated=true flag tells script.js to skip the wake-word
+      // wait, greet, and auto-start listening -- see handleAuthenticatedArrival()
+      // in script.js. Adjust the path below if index.html lives elsewhere.
+      setTimeout(() => {
+        window.location.href = "index.html?authenticated=true";
+      }, 600); // brief pause so the "Welcome" message is actually readable
+    }
+  </script>
+
+</body>
+</html>

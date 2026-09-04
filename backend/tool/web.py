@@ -2,9 +2,9 @@
 tool/web.py
 ============
 Lightweight web access -- separate from tool/browser.py.
-Use this for "look something up" tasks that don't need a real browser
-(no login, no clicking, no JS-heavy pages). browser.py is for when the
-agent needs to actually interact with a page.
+
+Phase 4.2E update: every function now returns (ok: bool, message: str)
+instead of a bare string.
 
 Requires: pip install requests beautifulsoup4
 """
@@ -13,7 +13,7 @@ import requests
 from bs4 import BeautifulSoup
 
 
-def web_search(query: str) -> str:
+def web_search(query: str) -> tuple[bool, str]:
     """Search the web and return the top results. Input: a search query."""
     try:
         resp = requests.get(
@@ -35,13 +35,13 @@ def web_search(query: str) -> str:
                 results.append(f"{title}: {snippet}" if snippet else title)
 
         if results:
-            return "\n".join(results)
-        return f"No web results found for '{query}'."
+            return True, "\n".join(results)
+        return False, f"No web results found for '{query}'."
     except Exception as e:
-        return f"Error searching: {e}"
+        return False, f"Error searching: {e}"
 
 
-def fetch_url(url: str) -> str:
+def fetch_url(url: str) -> tuple[bool, str]:
     """Fetch a webpage and return its visible text (capped). Input: a URL."""
     try:
         url = url.strip()
@@ -53,6 +53,8 @@ def fetch_url(url: str) -> str:
         for tag in soup(["script", "style", "nav", "footer"]):
             tag.decompose()
         text = " ".join(soup.get_text(separator=" ").split())
-        return text[:3000] if text else "(no readable text found on page)"
+        if not text:
+            return False, "No readable text found on that page."
+        return True, text[:3000]
     except Exception as e:
-        return f"Error fetching {url}: {e}"
+        return False, f"Error fetching {url}: {e}"

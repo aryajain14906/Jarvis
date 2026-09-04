@@ -9,3 +9,10 @@ __pycache__/
 
 # Compiled Python files
 *.pyc
+
+face_data/
+face_model.yml
+face_labels.json
+jarvis_memory.db
+tool_calls.log
+haarcascade_frontalface_default.xml

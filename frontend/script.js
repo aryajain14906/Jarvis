@@ -1795,6 +1795,48 @@
 
     document.addEventListener("click", unlockAudioOnce, { once: true });
     document.addEventListener("keydown", unlockAudioOnce, { once: true });
+
+    handleAuthenticatedArrival();
+  }
+
+  /* -------------------------------------------------------------------- */
+  /* Face-login handoff                                                    */
+  /* -------------------------------------------------------------------- */
+  /*
+   * If we arrived here via a successful face verification (login.html
+   * redirects to index.html?authenticated=true), skip the wake-word wait:
+   * greet immediately through the real voice pipeline, then auto-start
+   * listening once the greeting actually finishes.
+   *
+   * Browsers can silently block autoplay audio on a fresh page load (no
+   * user gesture yet on THIS page, even if one happened on login.html) --
+   * JarvisState naturally goes SPEAKING -> IDLE when the greeting genuinely
+   * finishes, so that's what triggers the mic. If it's blocked and that
+   * transition never happens, the timeout fallback starts the mic anyway
+   * rather than leaving JARVIS stuck silently waiting.
+   */
+  function handleAuthenticatedArrival() {
+    var params = new URLSearchParams(window.location.search);
+    if (params.get("authenticated") !== "true") return;
+
+    // Remove the query param so refreshing the page doesn't replay this.
+    window.history.replaceState({}, document.title, window.location.pathname);
+
+    unlockAudioOnce();
+
+    var started = false;
+    function startListeningOnce() {
+      if (started) return;
+      started = true;
+      if (!isListening) toggleListening();
+    }
+
+    JarvisState.onChange(function (state, previous) {
+      if (previous === "SPEAKING" && state === "IDLE") startListeningOnce();
+    });
+
+    JarvisVoice.speak("Hello sir, systems online.");
+    setTimeout(startListeningOnce, 4000); // fallback if the greeting audio never actually played
   }
 
   document.addEventListener("DOMContentLoaded", init);
