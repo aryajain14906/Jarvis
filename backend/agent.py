@@ -76,6 +76,17 @@ Rules:
   say", "read the content of wikipedia.org that you opened"). read_file is ONLY for a specific named
   file/path on disk. If it's unclear which one is meant and a browser was recently opened/navigated,
   prefer read_page over guessing a fake file path.
+- see_screen and read_screen_text are DIFFERENT tools for different needs. see_screen gives a general,
+  approximate description (which app, rough layout) -- use it for "what's on my screen", "what app am I
+  using". It is NOT reliable for exact wording. read_screen_text uses real OCR and gives exact text --
+  use it for "what does the error say", "read this message", "what does that button say", anything where
+  precise wording matters. When phrasing a see_screen result, hedge it ("it looks like...", "this appears
+  to be...") rather than stating it as confirmed fact -- vision descriptions can be confidently wrong
+  about specific details even when the general gist is right.
+- click_on_screen is EXPERIMENTAL and ONLY for desktop application UI with no other way to interact.
+  If a browser is open and the target is on a webpage, use the browser's own "click" tool instead --
+  it's far more reliable than guessing screen coordinates. Only use click_on_screen for native desktop
+  app buttons/elements that a browser tool can't reach.
 - Current weather/temperature for a place MUST use the get_weather tool -- you cannot know live weather from
   training knowledge, no matter how confident you feel. Never estimate or guess a temperature yourself.
 - Dates of festivals/holidays that follow a lunar or lunisolar calendar (e.g. Navratri, Diwali, Janmashtami,
@@ -197,6 +208,18 @@ User: "how much ram am i using"
 
 User: "what's my battery percentage"
 {{"action": "tool", "tool": "battery_status", "input": ""}}
+
+User: "what's on my screen"
+{{"action": "tool", "tool": "see_screen", "input": ""}}
+
+User: "what app am I currently using"
+{{"action": "tool", "tool": "see_screen", "input": "What application is currently the main focus on screen?"}}
+
+User: "what does the error message say"
+{{"action": "tool", "tool": "read_screen_text", "input": ""}}
+
+User: "read the text on my screen"
+{{"action": "tool", "tool": "read_screen_text", "input": ""}}
 
 User: "delete the file test.txt on my desktop"
 {{"action": "tool", "tool": "delete_file", "input": "C:/Users/jains/Desktop/test.txt"}}
@@ -552,11 +575,12 @@ def run_agent(question: str, context: str = "") -> str:
             "content": (
                 f"Tool result -- {observation['tool']}: {observation['result']!r} "
                 f"(ok={observation['ok']}).\n\n"
-                "Decide the next step. If you need another tool to fully answer the ORIGINAL "
-                "request, respond with another tool JSON. If you now have enough, respond with "
-                '{"action": "answer", "content": "..."} and I will phrase the final reply myself '
-                "using the real results -- your content field here can be brief/internal, it "
-                "won't be spoken verbatim."
+                "Look at the ORIGINAL request again. If this result already fully answers it, "
+                "respond with {\"action\": \"answer\", \"content\": \"...\"} RIGHT NOW -- do not call "
+                "another tool just because you can, and do not gather extra information the user "
+                "didn't ask for (e.g. don't re-check something you already just checked, don't look "
+                "up unrelated facts). Only call another tool if the ORIGINAL request has a part that "
+                "genuinely still isn't answered yet. When in doubt, answer now rather than continue."
             ),
         })
 

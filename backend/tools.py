@@ -30,6 +30,7 @@ from tool.web import web_search, fetch_url
 from tool.memory import remember_fact
 from tool.audit import recent_actions
 from tool.weather import get_weather
+from tool.vision import see_screen, read_screen_text, click_on_screen
 
 # ---- Safe arithmetic evaluator (no eval()) ----
 _ALLOWED_OPERATORS = {
@@ -102,6 +103,21 @@ TOOLS = {
         "function": get_weather,
         "description": "Get the real current weather/temperature for a place. Input: a city or place name, e.g. 'Thane, India'.",
         "risk": "read_only",
+    },
+    "see_screen": {
+        "function": see_screen,
+        "description": "Get a GENERAL description of what's on screen (which app, rough layout) -- fast but NOT reliable for exact text/labels. Input: a specific question about the screen, or empty string for a general description.",
+        "risk": "read_only",
+    },
+    "read_screen_text": {
+        "function": read_screen_text,
+        "description": "Extract the EXACT text visible on screen via OCR -- use this whenever precise wording matters (error messages, button labels), not see_screen. Input: ignored, pass empty string.",
+        "risk": "read_only",
+    },
+    "click_on_screen": {
+        "function": click_on_screen,
+        "description": "EXPERIMENTAL: click a desktop UI element (not a browser page -- use the browser 'click' tool for that) by its visible text. Only for desktop apps with no other way to interact. Input: the exact or approximate text on the element to click.",
+        "risk": "low_risk",
     },
     # --- 4.2B: system ---
     "open_application": {

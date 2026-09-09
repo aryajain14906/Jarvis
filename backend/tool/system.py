@@ -219,10 +219,29 @@ def switch_application(app_name: str) -> tuple[bool, str]:
         if not found:
             return False, f"{app_name} is running, but I couldn't find its window to switch to."
 
-        win32gui.ShowWindow(found[0], 9)  # SW_RESTORE
-        win32gui.SetForegroundWindow(found[0])
+        target_hwnd = found[0]
+        win32gui.ShowWindow(target_hwnd, 9)  # SW_RESTORE
+
+        # SetForegroundWindow silently fails (with a misleading error) when
+        # called from a background process -- Windows' anti focus-stealing
+        # protection blocks it unless the caller's input thread is attached
+        # to the target window's thread first. This is the standard bypass.
+        try:
+            win32gui.SetForegroundWindow(target_hwnd)
+        except Exception:
+            import win32api
+            import win32con
+
+            current_thread = win32api.GetCurrentThreadId()
+            target_thread, _ = win32process.GetWindowThreadProcessId(target_hwnd)
+            win32process.AttachThreadInput(current_thread, target_thread, True)
+            try:
+                win32gui.SetForegroundWindow(target_hwnd)
+            finally:
+                win32process.AttachThreadInput(current_thread, target_thread, False)
+
         return True, f"Switched to {app_name}."
-    except ImportError:
+    except ImportError as e:
         return False, "Switching windows needs pywin32 installed -- run: pip install pywin32"
     except Exception as e:
         return False, f"Error switching to {app_name}: {e}"
@@ -233,7 +252,9 @@ def mute(_: str = "") -> tuple[bool, str]:
     try:
         import comtypes
         from ctypes import cast, POINTER
-        from pycaw.pycaw import IAudioEndpointVolume, IMMDeviceEnumerator, EDataFlow, ERole, CLSID_MMDeviceEnumerator
+        from pycaw.api.endpointvolume import IAudioEndpointVolume
+        from pycaw.api.mmdeviceapi import IMMDeviceEnumerator
+        from pycaw.constants import CLSID_MMDeviceEnumerator, EDataFlow, ERole
 
         enumerator = comtypes.CoCreateInstance(
             CLSID_MMDeviceEnumerator, IMMDeviceEnumerator, comtypes.CLSCTX_INPROC_SERVER
@@ -245,8 +266,8 @@ def mute(_: str = "") -> tuple[bool, str]:
         currently_muted = volume.GetMute()
         volume.SetMute(0 if currently_muted else 1, None)
         return True, "Unmuted." if currently_muted else "Muted."
-    except ImportError:
-        return False, "Mute needs pycaw installed -- run: pip install pycaw comtypes"
+    except ImportError as e:
+        return False, f"Mute import error (pycaw version mismatch?): {e}"
     except Exception as e:
         return False, f"Error toggling mute: {e}"
 
@@ -256,7 +277,9 @@ def get_volume(_: str = "") -> tuple[bool, str]:
     try:
         import comtypes
         from ctypes import cast, POINTER
-        from pycaw.pycaw import IAudioEndpointVolume, IMMDeviceEnumerator, EDataFlow, ERole, CLSID_MMDeviceEnumerator
+        from pycaw.api.endpointvolume import IAudioEndpointVolume
+        from pycaw.api.mmdeviceapi import IMMDeviceEnumerator
+        from pycaw.constants import CLSID_MMDeviceEnumerator, EDataFlow, ERole
 
         enumerator = comtypes.CoCreateInstance(
             CLSID_MMDeviceEnumerator, IMMDeviceEnumerator, comtypes.CLSCTX_INPROC_SERVER
@@ -267,8 +290,8 @@ def get_volume(_: str = "") -> tuple[bool, str]:
 
         level = round(volume.GetMasterVolumeLevelScalar() * 100)
         return True, f"Volume is at {level}%."
-    except ImportError:
-        return False, "Volume reading needs pycaw installed -- run: pip install pycaw comtypes"
+    except ImportError as e:
+        return False, f"Volume reading import error (pycaw version mismatch?): {e}"
     except Exception as e:
         return False, f"Error reading volume: {e}"
 
@@ -283,7 +306,9 @@ def set_volume(level_str: str) -> tuple[bool, str]:
     try:
         import comtypes
         from ctypes import cast, POINTER
-        from pycaw.pycaw import IAudioEndpointVolume, IMMDeviceEnumerator, EDataFlow, ERole, CLSID_MMDeviceEnumerator
+        from pycaw.api.endpointvolume import IAudioEndpointVolume
+        from pycaw.api.mmdeviceapi import IMMDeviceEnumerator
+        from pycaw.constants import CLSID_MMDeviceEnumerator, EDataFlow, ERole
 
         # Some pycaw versions wrap AudioUtilities.GetSpeakers()'s result in their
         # own AudioDevice object, which has no .Activate() -- going straight to
@@ -296,8 +321,8 @@ def set_volume(level_str: str) -> tuple[bool, str]:
         volume = cast(interface, POINTER(IAudioEndpointVolume))
         volume.SetMasterVolumeLevelScalar(level / 100.0, None)
         return True, f"Volume set to {level}%."
-    except ImportError:
-        return False, "Volume control needs pycaw installed -- run: pip install pycaw comtypes"
+    except ImportError as e:
+        return False, f"Volume control import error (pycaw version mismatch?): {e}"
     except Exception as e:
         return False, f"Error setting volume: {e}"
 
@@ -362,7 +387,7 @@ def take_screenshot(_: str = "") -> tuple[bool, str]:
         img = ImageGrab.grab()
         img.save(path)
         return True, f"Screenshot saved to {path}."
-    except ImportError:
+    except ImportError as e:
         return False, "Screenshots need Pillow installed -- run: pip install pillow"
     except Exception as e:
         return False, f"Error taking screenshot: {e}"
